@@ -38,10 +38,27 @@ class YellowPagesService {
         });
         continue;
       }
+      if (page.url().includes("https://www.yellowpages.ca/search/re/")) {
+        //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
+        const links = await page.evaluate(() => {
+          return [...document.querySelectorAll("a")].map((element) => element.getAttribute("href"));
+        });
+        const filteredLinks = links.filter((link) => link !== null);
+        const link = filteredLinks.find((link) => link.startsWith("/bus/"));
+        if (link) {
+          await page.goto(`https://www.yellowpages.ca${link}`);
+        } else {
+          results.push({
+            number: number,
+            success: false,
+            error: "No results found",
+          });
+          continue;
+        }
+      }
       const yellowPagesData = await page.evaluate(() => {
         // Initialize an empty object to store the extracted data
         var data = {};
-
         // Find all elements with class "newMessage" with inner text of "Website" and grab parents parent href
         const websiteElement = document.querySelectorAll(".newMessage");
         if (websiteElement.length === 0) {

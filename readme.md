@@ -1,6 +1,10 @@
 # yellow_pages_scraper
 
-`yellow_pages_scraper` is a web scraper that uses [Puppeteer](https://www.npmjs.com/package/puppeteer) to gather information from yellowpages.ca by phone number
+`yellow_pages_scraper` is a web scraper that uses [Puppeteer](https://www.npmjs.com/package/puppeteer) to gather information from yellowpages.ca by phone number.
+
+## Notes
+
+- If there is multiple results for the phone number it will only return the first result.
 
 ## Getting Started
 
