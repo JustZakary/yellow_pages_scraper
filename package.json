@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "puppeteer": "^20.7.3"
+  },
+  "name": "yellow_pages_scraper",
+  "version": "1.0.0",
+  "description": "A puppeteer powered scraper for yellowpages.ca",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "",
+  "license": "ISC"
+}
