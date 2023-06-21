@@ -1,6 +1,3 @@
-// Import required modules
-const fs = require("fs");
-
 // Define a class for the Yellow Pages service
 class YellowPagesService {
   constructor(puppeteerService) {
