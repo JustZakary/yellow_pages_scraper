@@ -21,9 +21,7 @@ var { YellowPagesService } = require("yellow_pages_scraper");
 
 (async () => {
   var yps = await new YellowPagesService();
-  yps.getYellowPagesData("604-484-6018", (data) => {
-    console.log(data);
-  });
+  console.log(await yps.getYellowPagesData("+1705476 3373"));
 })();
 ```
 
@@ -37,17 +35,10 @@ var { YellowPagesService } = require("yellow_pages_scraper");
 (async () => {
   var yps = await new YellowPagesService();
   // All of these formats are valid
-  yps.getYellowPagesData("+1 (604) 484-6018", (data) => {
-    console.log(data);
-  });
-
-  yps.getYellowPagesData("7054727510", (data) => {
-    console.log(data);
-  });
-
-  yps.getYellowPagesData("+1705476 3373", (data) => {
-    console.log(data);
-  });
+  console.log(await yps.getYellowPagesData("705-476-3373"));
+  console.log(await yps.getYellowPagesData("705 476 3373"));
+  console.log(await yps.getYellowPagesData("+1705476 3373"));
+  console.log(await yps.getYellowPagesData("1-705-476-3373"));
 })();
 ```
 
