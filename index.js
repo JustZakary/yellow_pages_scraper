@@ -152,6 +152,9 @@ class YellowPagesService {
 
   cleanUpSchema() {
     if (this.schema.aggregateRating) {
+      if (this.schema.aggregateRating == "Write a review") {
+        this.schema.aggregateRating = "";
+      }
       this.schema.aggregateRating = this.schema.aggregateRating.replace(/\n/g, "");
     }
 
