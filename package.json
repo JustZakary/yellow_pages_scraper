@@ -1,12 +1,12 @@
 {
   "dependencies": {
-    "puppeteer": "^20.7.3"
+    "cheerio": "^1.0.0-rc.12",
+    "request": "^2.88.2"
   },
   "name": "yellow_pages_scraper",
-  "version": "1.0.4",
-  "description": "A puppeteer powered scraper for yellowpages.ca",
+  "version": "1.2.0",
+  "description": "A business scraper for yellowpages.ca",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "node test.js"
   },
@@ -15,7 +15,6 @@
   "keywords": [
     "Yellow Pages",
     "web scraping",
-    "Puppeteer",
     "phone number lookup"
   ],
   "homepage": "https://github.com/JustZakary/yellow_pages_scraper"

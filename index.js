@@ -1,182 +1,194 @@
-// Define a class for the Yellow Pages service
+const request = require("request");
+const cheerio = require("cheerio");
+
 class YellowPagesService {
-  constructor(puppeteerService) {
-    if (puppeteerService) {
-      this.puppeteerService = puppeteerService;
-    } else {
-      const puppeteer = require("puppeteer");
-      (async () => {
-        this.puppeteerService = await puppeteer.launch({ headless: "new" });
-      })();
-    }
+  constructor() {
+    this.schema = null;
   }
-
-  // Define a method to get Yellow Pages data for a given phone number
-  async getYellowPagesData(phoneNumbers, callback) {
-    while (!this.puppeteerService) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-
-    if (typeof phoneNumbers == "string") {
-      phoneNumbers = [phoneNumbers];
-    }
-
-    var results = [];
-    for (let index = 0; index < phoneNumbers.length; index++) {
-      const number = phoneNumbers[index];
-      const url = `https://www.yellowpages.ca/search/re/1/${number.replace(/\D/g, "")}`; // Remove all non-numeric characters from the phone number
-      const page = await this.puppeteerService.newPage(); // Create a new page using Puppeteer
-      await page.goto(url); // Navigate to the Yellow Pages URL
-      if (page.url().includes("https://www.yellowpages.ca/fs/")) {
-        results.push({
+  async getYellowPagesData(phoneNumber, callback) {
+    var results = {};
+    const number = phoneNumber;
+    const url = `https://www.yellowpages.ca/search/re/1/${number.replace(/\D/g, "")}`;
+    this.getHTML(url, async (err, body) => {
+      if (err) {
+        results = {
           number: number,
           success: false,
           error: "No results found",
-        });
-        continue;
-      }
-      if (page.url().includes("https://www.yellowpages.ca/search/re/")) {
-        //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
-        const links = await page.evaluate(() => {
-          return [...document.querySelectorAll("a")].map((element) => element.getAttribute("href"));
-        });
-        const filteredLinks = links.filter((link) => link !== null);
-        const link = filteredLinks.find((link) => link.startsWith("/bus/"));
-        if (link) {
-          await page.goto(`https://www.yellowpages.ca${link}`);
-        } else {
-          results.push({
+        };
+      } else {
+        //Get all Structured this.schema data from the page
+        try {
+          var structuredData = await this.getStructuredData(body);
+          //get first this.schema of type "LocalBusiness" or "Organization" or "Restaurant"
+          this.schema = structuredData.schemas.find((item) => {
+            return item.itemType === "http://schema.org/LocalBusiness" || item.itemType === "http://schema.org/Organization" || item.itemType === "http://schema.org/Restaurant";
+          });
+
+          //add all other keys from structured data to the this.schema
+          for (const key in structuredData) {
+            if (key !== "schemas") {
+              this.schema[key] = structuredData[key];
+            }
+          }
+
+          if (!this.schema) {
+            results = {
+              number: number,
+              success: false,
+              error: "No results found",
+            };
+          } else {
+            this.cleanUpSchema();
+            results = {
+              number: number,
+              success: true,
+              data: this.schema,
+            };
+          }
+        } catch (error) {
+          console.log(error);
+          results = {
             number: number,
             success: false,
             error: "No results found",
-          });
-          continue;
+          };
         }
+
+        callback(null, results);
       }
-      const yellowPagesData = await page.evaluate(() => {
-        // Initialize an empty object to store the extracted data
-        var data = {};
-        // Find all elements with class "newMessage" with inner text of "Website" and grab parents parent href
-        const websiteElement = document.querySelectorAll(".newMessage");
-        if (websiteElement.length === 0) {
-          data["website"] = "";
-        } else {
-          for (const element of websiteElement) {
-            if (element.innerText === "Website") {
-              var foundWebsite = decodeURIComponent(
-                element.parentElement.parentElement.getAttribute("href").split("?redirect=")[1]
-              );
-              // Check if website is a social media link
-              if (
-                foundWebsite.includes("facebook.com") ||
-                foundWebsite.includes("instagram.com") ||
-                foundWebsite.includes("twitter.com") ||
-                foundWebsite.includes("linkedin.com") ||
-                foundWebsite.includes("youtube.com") ||
-                foundWebsite.includes("pinterest.com")
-              ) {
-                foundWebsite = "";
-              }
-              data["website"] = foundWebsite;
-            }
-          }
-        }
+    });
+  }
 
-        // Find img with alt that contains " - Logo" and grab src
-        const logoElement = document.querySelectorAll("img");
-        for (const element of logoElement) {
-          if (element.getAttribute("alt")) {
-            if (element.getAttribute("alt").includes(" - Logo")) {
-              data["logo"] = element.getAttribute("src");
-            }
-          }
-        }
-
-        // Collect all hrefs that start with "/gourl/"
-        var links = [];
-        const aElements = document.querySelectorAll("a");
-        for (const element of aElements) {
-          // Check if URL starts with "/gourl/"
-          if (element.getAttribute("href")) {
-            if (element.getAttribute("href").startsWith("/gourl/")) {
-              // Grab "?redirect=" parameter and format back to string
-              const redirect = element.getAttribute("href").split("?redirect=")[1];
-              const redirectString = decodeURIComponent(redirect);
-              links.push(redirectString);
-            }
-          }
-        }
-
-        // Find all elements with an "itemprop" attribute and add their values to the data object
-        const infoElements = document.querySelectorAll("[itemprop]");
-        for (const element of infoElements) {
-          // Check if value already exists
-          if (!data[element.getAttribute("itemprop")]) {
-            if (element.getAttribute("itemprop") === "description") {
-              const spanElement = element.querySelector("span");
-              if (spanElement && spanElement.innerText) {
-                data.description = element.innerText.replace("more...", spanElement.innerText);
-              }
+  async getHTML(url, callback) {
+    request({ url, followAllRedirects: true }, async (error, response, body) => {
+      //get url and return html
+      var url = response.request.uri.href;
+      if (url.includes("https://www.yellowpages.ca/search/re/")) {
+        //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
+        const $ = cheerio.load(body);
+        const links = $("a")
+          .map((i, el) => $(el).attr("href"))
+          .get();
+        const link = links.find((link) => link.startsWith("/bus/"));
+        if (link) {
+          url = `https://www.yellowpages.ca${link}`;
+          request({ url, followAllRedirects: true }, async (error, response, body) => {
+            if (error) {
+              callback(error, null);
             } else {
-              const innerText = element.innerText;
-              if (innerText) {
-                data[element.getAttribute("itemprop")] = innerText;
-              }
+              callback(null, body);
             }
+          });
+        }
+      } else {
+        callback(null, body);
+      }
+    });
+  }
+
+  async getStructuredData(html) {
+    try {
+      const $ = cheerio.load(html);
+      const data = {
+        schemas: [],
+      };
+      //get all items with itemscope attribute
+      $("[itemscope]").each((i, scope) => {
+        const item = { itemType: $(scope).attr("itemtype") };
+        const reviews = [];
+
+        $("[itemprop]", scope).each((j, prop) => {
+          const key = $(prop).attr("itemprop");
+          const value = $(prop).attr("content") || $(prop).text();
+          if (!value || value.match(/^[\n\t\s]*$/) || item[key]) {
+            return;
           }
+          if (key === "review") {
+            const review = {};
+            $("[itemprop]", prop).each((k, subprop) => {
+              const subkey = $(subprop).attr("itemprop");
+              const subvalue = $(subprop).attr("content") || $(subprop).text();
+              if (!subvalue || subvalue.match(/^[\n\t\s]*$/) || review[subkey]) {
+                return;
+              }
+              review[subkey] = subvalue;
+            });
+            if (Object.keys(review).length > 0) {
+              reviews.push(review);
+            }
+          } else {
+            item[key] = value;
+          }
+        });
+
+        if (reviews.length > 0) {
+          item.reviews = reviews;
         }
 
-        // Return the extracted data
-        return {
-          success: true,
-          data: data,
-          links: [...new Set(links)],
-        };
+        data.schemas.push(item);
       });
 
-      if (yellowPagesData.success) {
-        results.push({
-          number: number,
-          success: true,
-          yellowpage: page.url(),
-          logo: yellowPagesData.data.logo || "",
-          business_name: yellowPagesData.data.name || "",
-          description: yellowPagesData.data.description || "",
-          street_address: yellowPagesData.data.streetAddress || "",
-          city: yellowPagesData.data.addressLocality || "",
-          province: yellowPagesData.data.addressRegion || "",
-          postal_code: yellowPagesData.data.postalCode || "",
-          phone_number: number,
-          website: yellowPagesData.data.website || "",
-          facebook_page: yellowPagesData.links.filter((link) => link.includes("facebook.com"))[0] || "",
-          instagram_page: yellowPagesData.links.filter((link) => link.includes("instagram.com"))[0] || "",
-          twitter_page: yellowPagesData.links.filter((link) => link.includes("twitter.com"))[0] || "",
-          linkedin_page: yellowPagesData.links.filter((link) => link.includes("linkedin.com"))[0] || "",
-          youtube_page: yellowPagesData.links.filter((link) => link.includes("youtube.com"))[0] || "",
-          pinterest: yellowPagesData.links.filter((link) => link.includes("pinterest.com"))[0] || "",
-        });
-      } else {
-        results.push({
-          number: number,
-          success: false,
-          error: yellowPagesData.error,
-        });
-        await page.close();
-      }
-    }
-    if (results.length === 1) {
-      callback(results[0]);
-    } else {
-      callback(results);
+      //get all other items (website, social media, etc)
+
+      //Website - find all a elements with a href that starts with "/gourl/" and get the href value and add it to an array
+      data.website = [];
+      $("a[href^='/gourl/']").each((i, el) => {
+        data.website.push(decodeURIComponent($(el).attr("href").split("?redirect=")[1]));
+      });
+
+      data.website = data.website.filter((item, index, self) => self.indexOf(item) === index); //filter out all that are the duplicate domain
+      data.website = data.website.filter((item) => item.startsWith("https://")); //filter out all non https links
+
+      //Separate social media links into their own keys
+      data.socialMedia = {};
+      data.socialMedia.facebook = data.website.filter((item) => item.includes("facebook.com"))[0] || ""; //Facebook
+      data.socialMedia.twitter = data.website.filter((item) => item.includes("twitter.com"))[0] || ""; //Twitter
+      data.socialMedia.instagram = data.website.filter((item) => item.includes("instagram.com"))[0] || ""; //Instagram
+      data.socialMedia.linkedin = data.website.filter((item) => item.includes("linkedin.com"))[0] || ""; //LinkedIn
+      data.socialMedia.youtube = data.website.filter((item) => item.includes("youtube.com"))[0] || ""; //YouTube
+      data.socialMedia.pinterest = data.website.filter((item) => item.includes("pinterest.com"))[0] || ""; //YouTube
+
+      //remove social media links from website array
+      const socialMediaDomains = /(facebook|twitter|linkedin|instagram|youtube|pinterest)\.com/i;
+      data.website = data.website.filter((item) => !item.match(socialMediaDomains));
+      data.website = data.website[0] || ""; //Website
+
+      return data;
+    } catch (error) {
+      console.log(error);
     }
   }
 
-  //close the browser and delete the instance
-  async close() {
-    if (this.browser && this.browser.isConnected()) {
-      const pages = await this.browser.pages();
-      await Promise.all(pages.map((page) => page.close()));
-      await this.browser.close();
+  cleanUpSchema() {
+    if (this.schema.aggregateRating) {
+      this.schema.aggregateRating = this.schema.aggregateRating.replace(/\n/g, "");
+    }
+
+    if (this.schema.reviewBody) {
+      delete this.schema.reviewBody;
+    }
+
+    if (this.schema.datePublished) {
+      delete this.schema.datePublished;
+    }
+
+    if (this.schema.reviews) {
+      delete this.schema.author;
+    }
+
+    if (this.schema.address) {
+      this.schema.address = this.schema.address.replace("\nGet directions »\n\n", "");
+      this.schema.address = this.schema.address.replace("\n", "");
+    }
+
+    if (this.schema.description) {
+      this.schema.description = this.schema.description.replace("\nmore...\nSee more text\n", "...");
+      this.schema.description = this.schema.description.replace("\n", "");
+    }
+
+    if (this.schema.itemType) {
+      this.schema.itemType = this.schema.itemType.replace("http://schema.org/", "");
     }
   }
 }
