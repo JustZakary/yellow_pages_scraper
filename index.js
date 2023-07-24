@@ -1,9 +1,8 @@
-const request = require("request");
-const cheerio = require("cheerio");
-
 class YellowPagesService {
   constructor() {
     this.schema = null;
+    this.request = require("request");
+    this.cheerio = require("cheerio");
   }
 
   async getYellowPagesData(phoneNumber) {
@@ -48,28 +47,74 @@ class YellowPagesService {
 
   async getHTML(url) {
     return new Promise((resolve, reject) => {
-      request({ url, followAllRedirects: true }, async (error, response, body) => {
+      this.request({ url, followAllRedirects: true, timeout: 10000 }, async (error, response, body) => {
         //get url and return html
-        var url = response.request.uri.href;
-        if (url.includes("https://www.yellowpages.ca/search/re/")) {
-          //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
-          const $ = cheerio.load(body);
-          const links = $("a")
-            .map((i, el) => $(el).attr("href"))
-            .get();
-          const link = links.find((link) => link.startsWith("/bus/"));
-          if (link) {
-            url = `https://www.yellowpages.ca${link}`;
-            request({ url, followAllRedirects: true }, async (error, response, body) => {
-              if (error) {
-                reject(error);
+        if (error) {
+          reject(error);
+        }
+        if (response == undefined) {
+          //retry request
+          this.request({ url, followAllRedirects: true, timeout: 10000 }, async (error, response, body) => {
+            if (error) {
+              reject(error);
+            } else {
+              var url = response.request.uri.href;
+              if (url.includes("https://www.yellowpages.ca/search/re/")) {
+                try {
+                  //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
+                  const $ = this.cheerio.load(body);
+                  const links = $("a")
+                    .map((i, el) => $(el).attr("href"))
+                    .get();
+                  const link = links.find((link) => link.startsWith("/bus/"));
+                  if (link) {
+                    url = `https://www.yellowpages.ca${link}`;
+                    this.request({ url, followAllRedirects: true, timeout: 10000 }, async (error, response, body) => {
+                      if (error) {
+                        reject(error);
+                      } else {
+                        resolve(body);
+                      }
+                    });
+                  } else {
+                    reject("No results found");
+                  }
+                } catch (err) {
+                  reject(err);
+                }
               } else {
                 resolve(body);
               }
-            });
-          }
+            }
+          });
         } else {
-          resolve(body);
+          var url = response.request.uri.href;
+          if (url.includes("https://www.yellowpages.ca/search/re/")) {
+            try {
+              //find the first link that starts with "https://www.yellowpages.ca/bus/" and navigate to it
+              const $ = this.cheerio.load(body);
+              const links = $("a")
+                .map((i, el) => $(el).attr("href"))
+                .get();
+              const link = links.find((link) => link.startsWith("/bus/"));
+              if (link) {
+                url = `https://www.yellowpages.ca${link}`;
+                this.request({ url, followAllRedirects: true }, async (error, response, body) => {
+                  if (error) {
+                    reject(error);
+                  } else {
+                    resolve(body);
+                  }
+                });
+              } else {
+                reject("No results found");
+              }
+            } catch (err) {
+              reject(err);
+            }
+          } else {
+            resolve(body);
+          }
         }
       });
     });
@@ -78,7 +123,7 @@ class YellowPagesService {
   async getStructuredData(html) {
     return new Promise((resolve, reject) => {
       try {
-        const $ = cheerio.load(html);
+        const $ = this.cheerio.load(html);
         const data = {
           schemas: [],
         };

@@ -4,7 +4,7 @@
     "request": "^2.88.2"
   },
   "name": "yellow_pages_scraper",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "A business scraper for yellowpages.ca",
   "main": "index.js",
   "scripts": {
