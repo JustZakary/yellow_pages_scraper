@@ -127,7 +127,6 @@ class YellowPagesService {
         });
 
         data.website = data.website.filter((item, index, self) => self.indexOf(item) === index); //filter out all that are the duplicate domain
-        data.website = data.website.filter((item) => item.startsWith("https://")); //filter out all non https links
 
         //Separate social media links into their own keys
         data.socialMedia = {};

@@ -4,7 +4,7 @@
     "request": "^2.88.2"
   },
   "name": "yellow_pages_scraper",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "A business scraper for yellowpages.ca",
   "main": "index.js",
   "scripts": {
@@ -17,5 +17,8 @@
     "web scraping",
     "phone number lookup"
   ],
-  "homepage": "https://github.com/JustZakary/yellow_pages_scraper"
+  "homepage": "https://github.com/JustZakary/yellow_pages_scraper",
+  "devDependencies": {
+    "@types/request": "^2.48.8"
+  }
 }
