@@ -45,6 +45,44 @@ class YellowPagesService {
     });
   }
 
+  async getYellowPagesDataFromUrl(url) {
+    return new Promise(async (resolve, reject) => {
+      const results = {};
+
+      try {
+        const body = await this.getHTML(url);
+        const structuredData = await this.getStructuredData(body);
+
+        this.schema = structuredData.schemas.find((item) => {
+          return item.itemType === "http://schema.org/LocalBusiness" || item.itemType === "http://schema.org/Organization" || item.itemType === "http://schema.org/Restaurant";
+        });
+
+        if (!this.schema) {
+          results.url = url;
+          results.success = false;
+          results.error = "No results found";
+        } else {
+          for (const key in structuredData) {
+            if (key !== "schemas") {
+              this.schema[key] = structuredData[key];
+            }
+          }
+          this.cleanUpSchema();
+          results.url = url;
+          results.success = true;
+          results.data = this.schema;
+        }
+      } catch (error) {
+        console.log(error);
+        results.url = url;
+        results.success = false;
+        results.error = "No results found";
+      }
+
+      resolve(results);
+    });
+  }
+
   async getHTML(url) {
     return new Promise((resolve, reject) => {
       this.request({ url, followAllRedirects: true, timeout: 10000 }, async (error, response, body) => {
